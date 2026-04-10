@@ -22,9 +22,7 @@ tools = [
         description="Classify customer query into category",
         inputSchema={
             "type": "object",
-            "properties": {
-                "query": {"type": "string"}
-            },
+            "properties": {"query": {"type": "string"}},
             "required": ["query"]
         },
     ),
@@ -33,15 +31,13 @@ tools = [
         description="Fetch customer account information",
         inputSchema={
             "type": "object",
-            "properties": {
-                "customer_id": {"type": "string"}
-            },
+            "properties": {"customer_id": {"type": "string"}},
             "required": ["customer_id"]
         },
     ),
     Tool(
         name="generate_response",
-        description="Generate support response for customer",
+        description="Generate support response",
         inputSchema={
             "type": "object",
             "properties": {
@@ -53,24 +49,22 @@ tools = [
     ),
     Tool(
         name="escalate_case",
-        description="Escalate complex customer cases",
+        description="Escalate complex issues",
         inputSchema={
             "type": "object",
-            "properties": {
-                "issue_type": {"type": "string"}
-            },
+            "properties": {"issue_type": {"type": "string"}},
             "required": ["issue_type"]
         },
     ),
 ]
 
-# MCP: list tools
+# Return tool list
 @server.list_tools()
 async def list_tools():
     return tools
 
 
-# MCP: execute tool
+# Tool execution
 @server.call_tool()
 async def call_tool(name, arguments):
 
@@ -91,27 +85,23 @@ async def call_tool(name, arguments):
 
     if name == "get_account_info":
         cid = arguments["customer_id"]
-
-        if cid in CUSTOMERS:
-            return CUSTOMERS[cid]
-
-        return {"error": "Customer not found"}
+        return CUSTOMERS.get(cid, {"error": "Customer not found"})
 
 
     if name == "generate_response":
         issue = arguments["issue_type"]
-        name = arguments["customer_name"]
+        customer = arguments["customer_name"]
 
         if issue == "billing":
-            return {"response": f"Hello {name}, we are checking your billing details and will resolve it shortly."}
+            return {"response": f"Hello {customer}, we are reviewing your billing details."}
 
         if issue == "refund":
-            return {"response": f"Hello {name}, your refund request has been received and is being processed."}
+            return {"response": f"Hello {customer}, your refund request is being processed."}
 
         if issue == "order_status":
-            return {"response": f"Hello {name}, your order is currently being processed and will arrive soon."}
+            return {"response": f"Hello {customer}, your order is currently on the way."}
 
-        return {"response": f"Hello {name}, our support team will assist you shortly."}
+        return {"response": f"Hello {customer}, our support team will assist you shortly."}
 
 
     if name == "escalate_case":
@@ -120,26 +110,33 @@ async def call_tool(name, arguments):
         if issue in ["refund", "billing"]:
             return {"escalation": "Escalated to human support agent"}
 
-        return {"escalation": "No escalation needed"}
+        return {"escalation": "No escalation required"}
 
 
-# SSE transport
+# SSE transport setup
 transport = SseServerTransport("/messages")
 
 
+# SSE connection endpoint
 async def handle_sse(request):
     return await transport.handle_sse(request, server)
 
 
-# Web app
+# Endpoint for tool calls
+async def handle_messages(request):
+    return await transport.handle_post(request)
+
+
+# Web application
 app = Starlette(
     routes=[
         Route("/sse", handle_sse),
+        Route("/messages", handle_messages, methods=["POST"]),
     ]
 )
 
 
-# Run server
+# Run server (Render compatible)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
